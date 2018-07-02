@@ -18,7 +18,7 @@
 
     <div class="ui form">
         <div class="field">
-            <label>输入需要翻译的文本</label>
+            <label for="input">输入需要翻译的文本</label>
             <textarea id="input"></textarea>
         </div>
     </div>
@@ -29,24 +29,62 @@
     </h3>
 
     <div class="option">
-        <div id="to-type" class="ui scrolling dropdown">
-            <div class="text"></div>
+        <div id="to-type" class="ui floating dropdown labeled search icon button">
+            <i class="world icon"></i>
+            <span class="text">选择语言</span>
             <i class="dropdown icon"></i>
         </div>
 
-        <button id="btn" class="ui primary button">翻译</button>
+        <button id="btn" class="ui positive button">翻译</button>
+
+        <button id="clear" class="ui negative button">清空</button>
     </div>
 
     <h3 class="ui horizontal divider header"><i class="sticky note outline icon"></i> 结果 </h3>
 
     <div id="output"></div>
 </div>
+
 <script src="https://cdn.bootcss.com/jquery/3.3.1/jquery.min.js"></script>
 <script src="https://cdn.bootcss.com/semantic-ui/2.3.1/semantic.min.js"></script>
 <script src="https://cdn.bootcss.com/blueimp-md5/2.10.0/js/md5.min.js"></script>
+
 <script>
-class Translate {
+class Storage {
     constructor() {
+        if (!localStorage.DB)
+            localStorage.DB = '[]';
+    }
+
+    load() {
+        const db = localStorage.DB;
+        if (!db)
+            return [];
+        else
+            return JSON.parse(db);
+    }
+
+    save(data) {
+        const arr = JSON.parse(localStorage.DB);
+        arr.push(JSON.stringify(data));
+        localStorage.DB = JSON.stringify(arr);
+    }
+
+    del(index) {
+        const arr = JSON.parse(localStorage.DB);
+        let i = arr.length - index - 1;
+        arr.splice(i, 1);
+        localStorage.DB = JSON.stringify(arr);
+    }
+
+    clear() {
+        localStorage.DB = '[]';
+    }
+}
+
+class Translate extends Storage {
+    constructor() {
+        super();
         this.toType = 'zh';
         this.init();
     }
@@ -55,29 +93,52 @@ class Translate {
         this.events();
     }
 
+    loadMsg(output) {
+        output.html('');
+        const arr = this.load();
+        if (!arr.length)
+            return;
+        arr.forEach(item => {
+            this.addMsg(output, JSON.parse(item), false);
+        });
+    }
+
+    clearMsg(output) {
+        this.clear();
+        output.html('');
+    }
+
     events() {
         const self = this;
         const input = $('#input');
         const output = $('#output');
         const languageList = $('#to-type');
         const btn = $('#btn');
+        const clear = $('#clear');
 
         input.focus();
 
+        self.loadMsg(output);
+
         languageList.dropdown({
-            values: self.languageData(),
-            onChange(value, text, $choice) {
+            values: Translate.languageData(),
+            onChange(value) {
                 self.toType = value;
             },
         });
 
         output.on('click', e => {
-            if (!$(e.target).hasClass('close')) 
+            if (!$(e.target).hasClass('close'))
                 return;
             $(e.target).closest('.message').transition('fade');
+            const index = $(e.target).parent().index();
+            self.del(index);
+            self.loadMsg(output);
         });
 
         btn.on('click', () => self.submit(input, output));
+
+        clear.on('click', () => self.clearMsg(output));
 
         input.on('keydown', e => {
             if (e.ctrlKey && e.key === 'Enter')
@@ -100,8 +161,15 @@ class Translate {
         });
     }
 
-    addMsg(output, data) {
-        const msg = this.verify(data);
+    addMsg(output, data, verify = true) {
+        let msg;
+        if (verify) {
+            msg = this.verify(data);
+            this.save(msg);
+        } else {
+            msg = data;
+        }
+        // const msg = verify ? this.verify(data) : data;
         const template = `
             <div class="ui ${msg.type} big message">
                 <i class="close icon"></i>
@@ -120,55 +188,59 @@ class Translate {
             switch (data.error_code) {
                 case '52001':
                     msg.title = data.error_code;
-                    msg.content = `${data.error_msg}（请求超时）请重试`;
+                    msg.content = `${data['error_msg']}（请求超时）请重试`;
                     break;
                 case '52002':
                     msg.title = data.error_code;
-                    msg.content = `${data.error_msg}（系统错误）请重试`;
+                    msg.content = `${data['error_msg']}（系统错误）请重试`;
                     break;
                 case '52003':
                     msg.title = data.error_code;
-                    msg.content = `${data.error_msg}（未授权用户）请检查appid是否正确，或者服务是否开通`;
+                    msg.content = `${data['error_msg']}（未授权用户）请检查appid是否正确，或者服务是否开通`;
                     break;
                 case '54000':
                     msg.title = data.error_code;
-                    msg.content = `${data.error_msg}（必填参数为空）请检查是否少传参数`;
+                    msg.content = `${data['error_msg']}（必填参数为空）请检查是否少传参数`;
                     break;
                 case '54001':
                     msg.title = data.error_code;
-                    msg.content = `${data.error_msg}（签名错误）请检查您的签名生成方法`;
+                    msg.content = `${data['error_msg']}（签名错误）请检查您的签名生成方法`;
                     break;
                 case '54003':
                     msg.title = data.error_code;
-                    msg.content = `${data.error_msg}（访问频率受限）请降低您的调用频率`;
+                    msg.content = `${data['error_msg']}（访问频率受限）请降低您的调用频率`;
                     break;
                 case '54004':
                     msg.title = data.error_code;
-                    msg.content = `${data.error_msg}（账户余额不足）请前往管理控制平台为账户充值`;
+                    msg.content = `${data['error_msg']}（账户余额不足）请前往管理控制平台为账户充值`;
                     break;
                 case '54005':
                     msg.title = data.error_code;
-                    msg.content = `${data.error_msg}（长query请求频繁）请降低长query的发送频率，3s后再试`;
+                    msg.content = `${data['error_msg']}（长query请求频繁）请降低长query的发送频率，3s后再试`;
                     break;
                 case '58000':
                     msg.title = data.error_code;
-                    msg.content = `${data.error_msg}（客户端IP非法）请检查个人资料里填写的IP地址是否正确`;
+                    msg.content = `${data['error_msg']}（客户端IP非法）请检查个人资料里填写的IP地址是否正确`;
                     break;
                 case '58001':
                     msg.title = data.error_code;
-                    msg.content = `${data.error_msg}（译文语言方向不支持）检查译文语言是否再语言列表里`;
+                    msg.content = `${data['error_msg']}（译文语言方向不支持）检查译文语言是否再语言列表里`;
                     break;
             }
         } else {
-            let res = data.trans_result[0];
+            let res = data.trans_result;
             msg.type = 'positive';
-            msg.title = res.src;
-            msg.content = res.dst;
+            msg.title = '';
+            msg.content = '';
+            res.forEach(item => {
+                msg.title += item.src + '<br>';
+                msg.content += item.dst + '<br>';
+            });
         }
         return msg;
     }
 
-    languageData() {
+    static languageData() {
         return [
             { name: '中文', value: 'zh', selected: true },
             { name: '英语', value: 'en' },
