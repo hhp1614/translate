@@ -1,0 +1,224 @@
+<head>
+    <title>translate</title>
+    <meta charset="utf-8">
+    <link href="https://cdn.bootcss.com/semantic-ui/2.3.1/semantic.min.css" rel="stylesheet">
+    <style>
+        .option {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+        }
+    </style>
+</head>
+<body>
+<div class="ui container">
+    <h1>Translate</h1>
+    
+    <h3 class="ui horizontal divider header"><i class="edit outline icon"></i> 输入 </h3>
+
+    <div class="ui form">
+        <div class="field">
+            <label>输入需要翻译的文本</label>
+            <textarea id="input"></textarea>
+        </div>
+    </div>
+
+    <h3 class="ui horizontal divider header">
+        <i class="angle double down icon"></i>
+        选项
+    </h3>
+
+    <div class="option">
+        <div id="to-type" class="ui scrolling dropdown">
+            <div class="text"></div>
+            <i class="dropdown icon"></i>
+        </div>
+
+        <button id="btn" class="ui primary button">翻译</button>
+    </div>
+
+    <h3 class="ui horizontal divider header"><i class="sticky note outline icon"></i> 结果 </h3>
+
+    <div id="output"></div>
+</div>
+<script src="https://cdn.bootcss.com/jquery/3.3.1/jquery.min.js"></script>
+<script src="https://cdn.bootcss.com/semantic-ui/2.3.1/semantic.min.js"></script>
+<script src="https://cdn.bootcss.com/blueimp-md5/2.10.0/js/md5.min.js"></script>
+<script>
+class Translate {
+    constructor() {
+        this.toType = 'zh';
+        this.init();
+    }
+
+    init() {
+        this.events();
+    }
+
+    events() {
+        const self = this;
+        const input = $('#input');
+        const output = $('#output');
+        const languageList = $('#to-type');
+        const btn = $('#btn');
+
+        input.focus();
+
+        languageList.dropdown({
+            values: self.languageData(),
+            onChange(value, text, $choice) {
+                self.toType = value;
+            },
+        });
+
+        output.on('click', e => {
+            if (!$(e.target).hasClass('close')) 
+                return;
+            $(e.target).closest('.message').transition('fade');
+        });
+
+        btn.on('click', () => self.submit(input, output));
+
+        input.on('keydown', e => {
+            if (e.ctrlKey && e.key === 'Enter')
+                self.submit(input, output);
+        });
+    }
+
+    submit(input, output) {
+        const q = $.trim(input.val());
+        if (!q)
+            return;
+        const to = this.toType;
+        const data = this.requestData(q, to);
+        const url = 'https://fanyi-api.baidu.com/api/trans/vip/translate';
+        $.getJSON(url + '?callback=?', data, res => {
+            this.addMsg(output, res);
+            input.focus();
+        }, err => {
+            console.log(err);
+        });
+    }
+
+    addMsg(output, data) {
+        const msg = this.verify(data);
+        const template = `
+            <div class="ui ${msg.type} big message">
+                <i class="close icon"></i>
+                <div class="header">${msg.title}</div>
+                <p>${msg.content}</p>
+            </div>
+        `;
+        const dom = $(template);
+        output.prepend(dom);
+    }
+
+    verify(data) {
+        const msg = {};
+        if (data.error_code) {
+            msg.type = 'negative';
+            switch (data.error_code) {
+                case '52001':
+                    msg.title = data.error_code;
+                    msg.content = `${data.error_msg}（请求超时）请重试`;
+                    break;
+                case '52002':
+                    msg.title = data.error_code;
+                    msg.content = `${data.error_msg}（系统错误）请重试`;
+                    break;
+                case '52003':
+                    msg.title = data.error_code;
+                    msg.content = `${data.error_msg}（未授权用户）请检查appid是否正确，或者服务是否开通`;
+                    break;
+                case '54000':
+                    msg.title = data.error_code;
+                    msg.content = `${data.error_msg}（必填参数为空）请检查是否少传参数`;
+                    break;
+                case '54001':
+                    msg.title = data.error_code;
+                    msg.content = `${data.error_msg}（签名错误）请检查您的签名生成方法`;
+                    break;
+                case '54003':
+                    msg.title = data.error_code;
+                    msg.content = `${data.error_msg}（访问频率受限）请降低您的调用频率`;
+                    break;
+                case '54004':
+                    msg.title = data.error_code;
+                    msg.content = `${data.error_msg}（账户余额不足）请前往管理控制平台为账户充值`;
+                    break;
+                case '54005':
+                    msg.title = data.error_code;
+                    msg.content = `${data.error_msg}（长query请求频繁）请降低长query的发送频率，3s后再试`;
+                    break;
+                case '58000':
+                    msg.title = data.error_code;
+                    msg.content = `${data.error_msg}（客户端IP非法）请检查个人资料里填写的IP地址是否正确`;
+                    break;
+                case '58001':
+                    msg.title = data.error_code;
+                    msg.content = `${data.error_msg}（译文语言方向不支持）检查译文语言是否再语言列表里`;
+                    break;
+            }
+        } else {
+            let res = data.trans_result[0];
+            msg.type = 'positive';
+            msg.title = res.src;
+            msg.content = res.dst;
+        }
+        return msg;
+    }
+
+    languageData() {
+        return [
+            { name: '中文', value: 'zh', selected: true },
+            { name: '英语', value: 'en' },
+            { name: '繁体中文语', value: 'cht' },
+            { name: '粤语', value: 'yue' },
+            { name: '文言文', value: 'wyw' },
+            { name: '日语', value: 'jp' },
+            { name: '韩语', value: 'kor' },
+            { name: '法语', value: 'fra' },
+            { name: '西班牙语', value: 'spa' },
+            { name: '泰语', value: 'th' },
+            { name: '阿拉伯语', value: 'ara', },
+            { name: '俄语', value: 'ru' },
+            { name: '葡萄牙语', value: 'pt' },
+            { name: '德语', value: 'de' },
+            { name: '意大利语', value: 'it' },
+            { name: '希腊语', value: 'el' },
+            { name: '荷兰语', value: 'nl' },
+            { name: '波兰语', value: 'pl' },
+            { name: '保加利亚语', value: 'bul' },
+            { name: '爱沙尼亚语', value: 'est' },
+            { name: '丹麦语', value: 'dan' },
+            { name: '芬兰语', value: 'fin' },
+            { name: '捷克语', value: 'cs' },
+            { name: '罗马尼亚语', value: 'rom' },
+            { name: '斯洛文尼亚语', value: 'sol' },
+            { name: '瑞典语', value: 'swe' },
+            { name: '匈牙利语', value: 'hu' },
+            { name: '越南语', value: 'vie' },
+        ];
+    }
+
+    requestData(q, to) {
+        /**
+         * url: https://fanyi-api.baidu.com/api/trans/vip/translate
+         * appid: 20171114000095206
+         * key: qHU5jVqGKrLTF7pMHBu8
+         * baidu appid: 2015063000000001
+         * baidu key: 12345678
+         */
+        const from = 'auto';
+        const appid = '2015063000000001';
+        const salt = +new Date;
+        const key = '12345678';
+        const str = appid + q + salt + key;
+        const sign = md5(str);
+        return { q, appid, salt, sign, from, to };
+    }
+}
+
+new Translate();
+</script>
+</body>
