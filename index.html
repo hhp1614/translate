@@ -282,9 +282,9 @@ class Translate extends Storage {
          * baidu key: 12345678
          */
         const from = 'auto';
-        const appid = '2015063000000001';
+        const appid = '20171114000095206';
         const salt = +new Date;
-        const key = '12345678';
+        const key = 'qHU5jVqGKrLTF7pMHBu8';
         const str = appid + q + salt + key;
         const sign = md5(str);
         return { q, appid, salt, sign, from, to };
